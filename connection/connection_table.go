@@ -8,14 +8,14 @@ import (
 
 type ConnectionTable struct {
 	Name        string
-	Connections map[string]Connection
+	Connections map[string]*Connection
 	mutex       sync.Mutex
 }
 
 func NewConnectionTable(name string) *ConnectionTable {
 	return &ConnectionTable{
 		Name:        name,
-		Connections: make(map[string]Connection),
+		Connections: make(map[string]*Connection),
 	}
 }
 
@@ -26,7 +26,7 @@ func (table *ConnectionTable) IsConnectionExistByID(id string) (ret bool) {
 	return
 }
 
-func (table *ConnectionTable) Add(conn Connection) (err error) {
+func (table *ConnectionTable) Add(conn *Connection) (err error) {
 	table.mutex.Lock()
 	defer table.mutex.Unlock()
 	err = nil
@@ -55,7 +55,7 @@ func (table *ConnectionTable) Remove(id string) *Connection {
 		return nil
 	} else {
 		delete(table.Connections, id)
-		return &conn
+		return conn
 	}
 }
 
@@ -64,7 +64,7 @@ func (table *ConnectionTable) GetConnByID(id string) *Connection {
 	defer table.mutex.Unlock()
 	conn, present := table.Connections[id]
 	if present {
-		return &conn
+		return conn
 	} else {
 		return nil
 	}
@@ -75,7 +75,7 @@ func (table *ConnectionTable) String() (str string) {
 	defer table.mutex.Unlock()
 	str = fmt.Sprintf("ConnectionTable[%s]\n", table.Name)
 	count := 0
-	for k, v := range table.Connections {
+	for _, v := range table.Connections {
 		count++
 		str += v.String()
 	}

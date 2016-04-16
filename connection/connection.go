@@ -8,6 +8,7 @@ heartbeat mechanism implemented
 import (
 	//"errors"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"go_dipc/msg"
 	"net"
@@ -22,6 +23,8 @@ const (
 )
 
 var BUFFER_SIZE = 10000
+var PROCESS_MSG_PER_CYCLE = 2000
+var IDLE_REST = 10 * time.Millisecond
 
 func State2Str(st int) (str string) {
 	switch st {
@@ -35,6 +38,34 @@ func State2Str(st int) (str string) {
 	return
 }
 
+const (
+	CONN_TYPE_A2A_CONNECT = "A2A_CONNECT"
+	CONN_TYPE_A2A_ACCEPT  = "A2A_ACCEPT"
+	CONN_TYPE_P2A_ACCEPT  = "P2A_ACCEPT"
+	CONN_TYPE_P2A_CONNECT = "P2A_CONNECT"
+	CONN_TYPE_P2P_CONNECT = "P2P_CONNECT"
+	CONN_TYPE_P2P_ACCEPT  = "P2P_ACCEPT"
+)
+
+func ValidateConnectionType(conn_type string) bool {
+	switch conn_type {
+	case CONN_TYPE_A2A_CONNECT:
+		return true
+	case CONN_TYPE_A2A_ACCEPT:
+		return true
+	case CONN_TYPE_P2A_ACCEPT:
+		return true
+	case CONN_TYPE_P2A_CONNECT:
+		return true
+	case CONN_TYPE_P2P_CONNECT:
+		return true
+	case CONN_TYPE_P2P_ACCEPT:
+		return true
+	default:
+		return false
+	}
+}
+
 /* b: the input pack for process
    c: the channel receiving app level msg */
 type mngFunc func(conn *Connection)
@@ -45,40 +76,49 @@ type Connection struct {
 	Status     int    //status 0:Unknow, 1:Conneccted, 2:Disconnected
 	Conn       net.Conn
 	mutex      sync.Mutex
-	chanIN     chan []byte
-	chanOUT    chan []byte
-	chanAPP    chan msg.CommMsg
+	chanOut    chan *msg.CommMsg
+	chanIn     chan *msg.CommMsg
+	chanApp    chan *msg.CommMsg
 	LastActSec int64
+	ConnType   string
 	mgr        *ConnectionMgr
 }
 
 func (conn *Connection) String() (str string) {
 	c_i, l_i, c_o, l_o := 0, 0, 0, 0
-	if conn.chanIN != nil {
-		c_i, l_i = cap(conn.chanIN), len(conn.chanIN)
+	if conn.chanIn != nil {
+		c_i, l_i = cap(conn.chanIn), len(conn.chanIn)
 	}
-	if conn.chanOUT != nil {
-		c_o, l_o = cap(conn.chanOUT), len(conn.chanOUT)
+	if conn.chanOut != nil {
+		c_o, l_o = cap(conn.chanOut), len(conn.chanOut)
 	}
 	str = fmt.Sprintf("Conn [%s - %s], Status[%s], IN [%d][%d], OUT[%d][%d]\n", conn.LocalID, conn.ID, State2Str(conn.GetStatus()), c_i, l_i, c_o, l_o)
 	return
 }
 
-func NewConnection(l_id string, r_id string, conn net.Conn, app_chan chan msg.CommMsg, mngHandler mngFunc, mgr *ConnectionMgr) (*Connection, error) {
+func NewConnection(l_id string, r_id string, conn_type string, conn net.Conn, app_chan chan *msg.CommMsg, mngHandler mngFunc, mgr *ConnectionMgr) (*Connection, error) {
+	if !ValidateConnectionType(conn_type) {
+		return nil, errors.New(fmt.Sprintf("ValidateSrcDst %s type unknown", conn_type))
+	}
+	err := ValidateSrcDstWhenNewConn(l_id, r_id, conn_type)
+	if err != nil {
+		return nil, err
+	}
 	appConn := &Connection{
 		LocalID:    l_id,
 		ID:         r_id,
 		Status:     ST_UNKNOWN,
 		Conn:       conn,
-		chanIN:     make(chan []byte, BUFFER_SIZE),
-		chanOUT:    make(chan []byte, BUFFER_SIZE),
-		chanAPP:    nil, //leave it nil here, mngHandler shall set it properly
+		chanIn:     make(chan *msg.CommMsg, BUFFER_SIZE),
+		chanOut:    make(chan *msg.CommMsg, BUFFER_SIZE),
+		chanApp:    app_chan,
 		LastActSec: time.Now().Unix(),
+		ConnType:   conn_type,
 		mgr:        mgr,
 	}
 	go appConn.RecvRoutine()
 	go appConn.SendRoutine()
-	go mngHandler(appConn)
+	go appConn.MngRoutine()
 	return appConn, nil
 }
 
@@ -105,7 +145,7 @@ func (conn *Connection) GetIdleSec() int64 {
 }
 
 /* Ensure the b bytes are send completely, else wait and block */
-func (conn *Connection) SendBytes(b []byte) error {
+func (conn *Connection) sendBytes(b []byte) error {
 	l := len(b)
 	offset := 0
 	x := 0
@@ -122,33 +162,27 @@ func (conn *Connection) SendBytes(b []byte) error {
 
 func (conn *Connection) SendRoutine() {
 	defer conn.Close()
-	len_byte := make([]byte, 2)
+	buf := make([]byte, 66560)                //65kb
+	copy(buf[0:msg.DEL_LEN], []byte(msg.DEL)) //prepare the fixed msg delimitor
+
 	serve_forever := true
 	for serve_forever {
-		select {
-		case b := <-conn.chanOUT:
-			//send delimitor
-			err := conn.SendBytes([]byte(msg.DEL))
-			if err != nil {
-				fmt.Println("SendRoutine SendDEL:", err)
-				return
+		for i := 0; i < PROCESS_MSG_PER_CYCLE; i++ {
+			select {
+			case m := <-conn.chanOut:
+				l, err := m.Pack(buf[msg.DEL_LEN+2:]) //pack the data
+				if err != nil {
+					fmt.Println("SendPackRoutine Pack failed:", err)
+				} else {
+					binary.LittleEndian.PutUint16(buf[msg.DEL_LEN:msg.DEL_LEN+2], uint16(l)) //pack the length of data
+					err = conn.sendBytes(buf[0 : msg.DEL_LEN+2+l])                           //sendout the msg
+				}
+			default:
+				time.Sleep(100)
 			}
-			binary.LittleEndian.PutUint16(len_byte, uint16(len(b)))
-			err = conn.SendBytes(len_byte)
-			if err != nil {
-				fmt.Println("SendRoutine SendLen:", err)
-				return
-			}
-			err = conn.SendBytes(b)
-			if err != nil {
-				fmt.Println("SendRoutine SendData:", err)
-				return
-			}
-		default:
-			if conn.GetStatus() != ST_CONNECTED {
-				return
-			}
-			time.Sleep(100)
+		}
+		if conn.GetStatus() > ST_CONNECTED {
+			serve_forever = false
 		}
 	}
 }
@@ -158,8 +192,8 @@ func (conn *Connection) RecvRoutine() {
 	buf := msg.NewMsgBuff(66560) //65kb
 	serve_forever := true
 	for serve_forever {
-		if conn.GetStatus() != ST_CONNECTED {
-			return
+		if conn.GetStatus() > ST_CONNECTED {
+			serve_forever = false
 		}
 		conn.Conn.SetReadDeadline(time.Now().Add(time.Second * 1))
 		l, err := conn.Conn.Read(buf.Buffer[buf.Used:]) //read to MsgBuffer
@@ -183,7 +217,7 @@ func (conn *Connection) RecvRoutine() {
 		} else {
 			conn.UpdateLastActSec()
 			buf.Used += l
-			buf.GetMsg(conn.chanIN) //decode msg from MsgBuffer and send to channel
+			buf.GetMsg(conn.chanIn) //decode msg from MsgBuffer and send to channel
 		}
 	}
 }
@@ -203,10 +237,10 @@ func (conn *Connection) SetStatus(status int) {
 }
 
 /* SendMsg in non-blocking way */
-func (conn *Connection) SendMsg(b []byte) bool {
-	if conn.chanIN != nil {
+func (conn *Connection) SendMsg(m *msg.CommMsg) bool {
+	if conn.chanIn != nil {
 		select {
-		case conn.chanIN <- b:
+		case conn.chanIn <- m:
 			return true
 		default:
 			return false
@@ -217,10 +251,10 @@ func (conn *Connection) SendMsg(b []byte) bool {
 }
 
 /* GetMsg in non-blocking way */
-func (conn *Connection) GetMsg() []byte {
+func (conn *Connection) GetMsg() *msg.CommMsg {
 	select {
-	case b := <-conn.chanOUT:
-		return b
+	case m := <-conn.chanOut:
+		return m
 	default:
 		return nil
 	}
