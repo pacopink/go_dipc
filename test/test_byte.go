@@ -7,6 +7,25 @@ import (
 	"strings"
 )
 
+/* Buffer for Recv */
+type MsgBuff struct {
+	Len    int
+	Used   int
+	Buffer []byte
+}
+
+func NewMsgBuff(l int) *MsgBuff {
+	if l <= 0 {
+		l = 1024
+	}
+	m := &MsgBuff{
+		Len:  l,
+		Used: 0,
+	}
+	m.Buffer = make([]byte, l)
+	return m
+}
+
 func TestMap() {
 	mm := make(map[string]string)
 	mm["Jan"] = "January"
@@ -24,6 +43,7 @@ func TestMap() {
 	} else {
 		fmt.Println("Jan is not exist")
 	}
+	delete(mm, "XXXX")
 	delete(mm, "Jan")
 	v, present = mm["Jan"]
 	if present {
@@ -84,4 +104,19 @@ func main() {
 	fmt.Printf("[%s] [%s]\n", h, l)
 
 	TestMap()
+
+	b := []byte("ABCD#I@P%C*DKJFDKJKSDJFKD")
+	const DEL = "#I@P%C*"
+	const DEL_LEN = len(DEL)
+	fmt.Println(bytes.Index(b, []byte(DEL)))
+
+	buff := NewMsgBuff(20)
+	fmt.Println(buff)
+
+	b = make([]byte, 100)
+	copy(b[10:], []byte("0123456789ABCDEFG"))
+	fmt.Println(b)
+	copy(b[0:], b[10:27])
+	fmt.Println(b)
+
 }

@@ -127,6 +127,48 @@ func IterList(wc *sync.WaitGroup) {
 	}
 }
 
+type SomeType struct {
+	K string
+	V int
+}
+
+func TestList() {
+	L := new(list.List)
+	L.PushBack(SomeType{
+		K: "aaaa",
+		V: 10,
+	})
+	L.PushBack(SomeType{
+		K: "aaaa",
+		V: 10,
+	})
+	L.PushBack(SomeType{
+		K: "aaaa",
+		V: 12,
+	})
+	fmt.Println(l)
+
+	e := L.Front()
+	for e != nil {
+		fmt.Println(e)
+		fmt.Println(e.Value)
+		t, ok := e.Value.(SomeType)
+		if !ok {
+			fmt.Println("Failed to convert type from element")
+		} else {
+			fmt.Println(t.K, t.V)
+		}
+		e = e.Next()
+	}
+
+	var c chan int
+	fmt.Printf("Uninitialized c cap[%d] len[%d]\n", cap(c), len(c))
+	c = make(chan int, 10)
+	c <- 1
+	c <- 1
+	fmt.Printf("Initialized c cap[%d] len[%d]\n", cap(c), len(c))
+}
+
 func main() {
 	InitList()
 	//fmt.Printf("list len[%d]\n", l.Len())
@@ -158,4 +200,6 @@ func main() {
 	} else {
 		fmt.Println("Failed to SerializeToBytes:", e)
 	}
+
+	TestList()
 }

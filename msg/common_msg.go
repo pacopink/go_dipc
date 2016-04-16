@@ -59,23 +59,6 @@ func (m *CommMsg) Pack(br []byte) (int, error) {
 	return l_eval + li, nil
 }
 
-func MakeMsgByFlagAndMsgType(flag uint8, msg_type uint16) MsgInterface {
-	if (flag & MNG_FLAG) != 0 {
-		switch msg_type {
-		case REGISTER:
-			return new(RegisterMsg)
-		case REGISTER_ACK:
-			return new(RegisterMsg)
-		case TOPO:
-			return new(TopoMsg)
-		default:
-			return nil
-		}
-	} else {
-		return new(DataMsg)
-	}
-}
-
 func (m *CommMsg) Unpack(b []byte) (int, error) {
 	l := len(b)
 	eval_l := 1 + 2 + 8 + 2 + 2 + 2 + 2 //at this moment the len at least
