@@ -25,6 +25,10 @@ type CommMsg struct {
 	Msg       MsgInterface
 }
 
+func (m *CommMsg) IsFlagOn(flag uint8) bool {
+	return (m.Flag & flag) != 0
+}
+
 func (m *CommMsg) Pack(br []byte) (int, error) {
 	var err error
 	//evaluate the length of the Pack result
@@ -126,13 +130,18 @@ func (m *CommMsg) Unpack(b []byte) (int, error) {
 
 func (m *CommMsg) String() string {
 	flag := Flag2Str(m.Flag)
-	msg_type := MsgType2Str(m.Type)
 
 	inner := ""
 	if m.Msg != nil {
 		inner = m.Msg.String()
 	}
 
-	return fmt.Sprintf("flag[%s] type[%s] src[%s] dst[%s] back[%s] payload[%s]",
-		flag, msg_type, m.Src, m.Dst, m.Back, inner)
+	if m.IsFlagOn(MNG_FLAG) {
+		msg_type := MsgType2Str(m.Type)
+		return fmt.Sprintf("flag[%s] type[%s] src[%s] dst[%s] back[%s] payload[%s]",
+			flag, msg_type, m.Src, m.Dst, m.Back, inner)
+	} else {
+		return fmt.Sprintf("flag[%s] type[%d] src[%s] dst[%s] back[%s] payload[%s]",
+			flag, m.Type, m.Src, m.Dst, m.Back, inner)
+	}
 }

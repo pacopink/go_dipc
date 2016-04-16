@@ -40,7 +40,7 @@ func PeerPattern(name string, pattern string) bool {
 }
 
 func PeerService(name string, servicename string) bool {
-	peer, host, err := ParseFullPeerName(name)
+	peer, _, err := ParseFullPeerName(name)
 	if err != nil {
 		return false
 	}
@@ -58,7 +58,7 @@ func IsBelong2Host(name string, host string) bool {
 }
 
 func IsAgent(name string) bool {
-	peer, host, err := ParseFullPeerName(name)
+	peer, _, err := ParseFullPeerName(name)
 	if err != nil {
 		return false
 	}

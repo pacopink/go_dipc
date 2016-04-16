@@ -21,7 +21,8 @@ func (m *DataMsg) Pack(b []byte) (int, error) {
 }
 
 func (m *DataMsg) Unpack(b []byte) (int, error) {
-	m.DataBuffer = b
+	m.DataBuffer = make([]byte, len(b))
+	copy(m.DataBuffer, b)
 	return len(b), nil
 }
 

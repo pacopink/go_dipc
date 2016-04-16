@@ -49,6 +49,15 @@ func TestData(t *testing.T) {
 		t.Fatalf("Convert failed")
 	}
 	fmt.Println(mm.DataBuffer)
+
+	fmt.Println("****** GenerateAppMsg Data ******")
+	y := GenerateAppMsg("AAAA@AAAA", "DDDDD@DDDDD", "CCCCCC*CCCCC", 256, []byte("00000000000000000000000000"))
+	fmt.Println(y)
+	l, err = y.Pack(b)
+	if err != nil {
+		t.Fatalf("Pack Data Failed:", err)
+	}
+	fmt.Println("Pack Data:", l, "  Data:", b[0:l])
 }
 
 func TestTopo(t *testing.T) {
@@ -88,6 +97,16 @@ func TestTopo(t *testing.T) {
 		t.Fatalf("Convert failed")
 	}
 	fmt.Println(mm.Peers, mm.BackupPeers)
+
+	fmt.Println("****** GenerateMngMsg Topo ******")
+	x := GenerateMngMsg("AAAA@AAAA", "AGENT@DDDDD", "", TOPO, mm)
+	fmt.Println(x)
+	l, err = m.Pack(b)
+	if err != nil {
+		t.Fatalf("Pack Topo Failed:", err)
+	}
+	fmt.Println("Pack Topo:", l, "  Data:", b[0:l])
+
 }
 
 /*

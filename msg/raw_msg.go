@@ -38,7 +38,7 @@ func NewMsgBuff(l int) *MsgBuff {
 	return m
 }
 
-func (m *MsgBuff) GetMsg(c chan []byte) int {
+func (m *MsgBuff) GetMsg(c chan *CommMsg) int {
 	msg_count := 0
 	offset := 0
 	for {
@@ -60,7 +60,11 @@ func (m *MsgBuff) GetMsg(c chan []byte) int {
 		if l+begin+2 > m.Used { //incomplete msg in buffer
 			break
 		}
-		c <- m.Buffer[begin:+2 : begin+2+l] //send decoded msg to channel
+		msg := new(CommMsg)
+		_, err := msg.Unpack(m.Buffer[begin:+2 : begin+2+l])
+		if err != nil {
+			c <- msg //send decoded msg to channel
+		}
 		msg_count++
 		offset += begin + 2 + l
 	}

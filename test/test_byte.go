@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
+	"time"
 )
 
 /* Buffer for Recv */
@@ -119,4 +120,27 @@ func main() {
 	copy(b[0:], b[10:27])
 	fmt.Println(b)
 
+	b = make([]byte, 10000)
+	c := make(chan []byte, 10)
+	go func() {
+		str := "Hello"
+		copy(b, []byte(str))
+		c <- b[0:len(str)]
+		str = "Hi"
+		copy(b, []byte(str))
+		c <- b[0:len(str)]
+		str = "XXXXXXXXXXXXXXXX"
+		copy(b, []byte(str))
+		c <- b[0:len(str)]
+		str = "YYYYYYYYY"
+		copy(b, []byte(str))
+		c <- b[0:len(str)]
+	}()
+	go func() {
+		for {
+			d := <-c
+			fmt.Println(string(d))
+		}
+	}()
+	time.Sleep(time.Second * 10)
 }

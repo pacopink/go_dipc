@@ -146,3 +146,7 @@ var GlobalTopo = &Topo{
 	Peers:  make(map[string]Peer),
 	Backup: make(map[string]string),
 }
+
+func SetLocalPeerName(local_name string) {
+	GlobalTopo.LocalName = local_name
+}
